@@ -75,7 +75,7 @@ void *handle_client(void *arg) {
     char buffer[BUFFER_SIZE];
     int read_size;
 
-    // 接收用户名
+    // recieve username
     read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
     if (read_size <= 0) {
         close(client_socket);
@@ -87,10 +87,10 @@ void *handle_client(void *arg) {
     clients[client_index].socket = client_socket;
     pthread_mutex_unlock(&mutex);
 
-    printf("%s 已上线\n", buffer);
+    printf("%s Online\n", buffer);
 
     char join_message[BUFFER_SIZE];
-    snprintf(join_message, sizeof(join_message), "%s 加入了聊天室", buffer);
+    snprintf(join_message, sizeof(join_message), "%s Join the chatting room", buffer);
     broadcast_message(join_message, client_socket);
 
     send_online_users(client_socket);
@@ -105,18 +105,18 @@ void *handle_client(void *arg) {
         char formatted_message[BUFFER_SIZE + 50];
         snprintf(formatted_message, sizeof(formatted_message), "%s - %s: %s", clients[client_index].username, time_str, buffer);
 
-        printf("收到来自 %s 的消息: %s\n", clients[client_index].username, buffer);
+        printf("Recive meesage from %s: %s\n", clients[client_index].username, buffer);
 
         broadcast_message(formatted_message, client_socket);
     }
 
-    // 用户离线处理
+    // Offline
     char leave_message[BUFFER_SIZE];
-    snprintf(leave_message, sizeof(leave_message), "%s 离开了聊天室", clients[client_index].username);
+    snprintf(leave_message, sizeof(leave_message), "%s Leave the chattig room", clients[client_index].username);
     printf("%s\n", leave_message);
     broadcast_message(leave_message, client_socket);
 
-    // 移除客户端
+    //remove client
     pthread_mutex_lock(&mutex);
     for (int i = client_index; i < client_count - 1; i++) {
         clients[i] = clients[i + 1];
@@ -130,7 +130,7 @@ void *handle_client(void *arg) {
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        fprintf(stderr, "用法: %s <端口号>\n", argv[0]);
+        fprintf(stderr, "usage: %s <Port number>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -140,38 +140,38 @@ int main(int argc, char *argv[]) {
     pthread_t thread_id;
     int port = atoi(argv[1]);
 
-    // 创建套接字
+    //set up socket
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("创建套接字失败");
+        perror("Fail to set up sockect");
         exit(EXIT_FAILURE);
     }
 
-    // 准备 sockaddr_in 结构
+    // Ready for sockaddr_in structure
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(port);
 
-    // 绑定
+    //Bond
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-        perror("绑定失败");
+        perror("Fail bonding");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
 
-    // 监听
+    //monitor
     listen(server_socket, 3);
 
-    printf("等待连接中...\n");
+    printf("waitting for connection...\n");
 
     while ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_len))) {
-        printf("连接已接受\n");
+        printf("connection recieved\n");
 
         ThreadArg *thread_arg = malloc(sizeof(ThreadArg));
         thread_arg->socket = client_socket;
         thread_arg->index = client_count;
 
         if (pthread_create(&thread_id, NULL, handle_client, thread_arg) < 0) {
-            perror("无法创建线程");
+            perror("Connect create Detaching threads");
             free(thread_arg);
             return 1;
         }
@@ -180,14 +180,18 @@ int main(int argc, char *argv[]) {
         client_count++;
         pthread_mutex_unlock(&mutex);
 
-        // 分离线程
+        // Detaching threads
         pthread_detach(thread_id);
     }
 
     if (client_socket < 0) {
-        perror("接受连接失败");
+        perror("Fail connection");
         return 1;
     }
+
+    close(server_socket);
+    return 0;
+}
 
     close(server_socket);
     return 0;
