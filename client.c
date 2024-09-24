@@ -18,10 +18,10 @@ void *receive_messages(void *arg) {
     }
 
     if (read_size == 0) {
-        printf("服务器已断开连接\n");
+        printf("Server is disconnect\n");
         fflush(stdout);
     } else if (read_size == -1) {
-        perror("接收失败");
+        perror("Fail to recieve");
     }
 
     return NULL;
@@ -29,7 +29,7 @@ void *receive_messages(void *arg) {
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "用法: %s <服务器IP> <端口号>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <Server IP> <Port number>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -41,54 +41,57 @@ int main(int argc, char *argv[]) {
     const char *server_ip = argv[1];
     int port = atoi(argv[2]);
 
-    // 创建套接字
+    // Set up
     if ((client_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("创建套接字失败");
+        perror("Failed to create socket");
         exit(EXIT_FAILURE);
     }
 
-    // 准备 sockaddr_in 结构
+    // Ready for sockaddr_in structure 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
 
-    // 连接到服务器
-    printf("正在与服务器建立连接...\n");
+    // Connect to server
+    printf("Connecting...\n");
     if (connect(client_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("连接失败");
+        perror("Fail connection");
         close(client_socket);
         exit(EXIT_FAILURE);
     }
-    printf("连接服务器成功\n");
+    printf("Successully connect\n");
 
-    printf("请输入你的用户名: ");
+    printf("Input username: ");
     fgets(username, 50, stdin);
     username[strcspn(username, "\n")] = 0;
 
-    // 发送用户名到服务器
+    // Send username to the server
     send(client_socket, username, strlen(username), 0);
 
-    // 接收并显示当前在线用户
+    // recieve and show the user
     char online_users[BUFFER_SIZE];
     recv(client_socket, online_users, BUFFER_SIZE, 0);
-    printf("当前在线用户: %s\n", online_users);
+    printf("Current online: %s\n", online_users);
 
-    printf("欢迎来到聊天频道，现在已经可以开始发送消息了\n");
+    printf("Welcome to the channle, ready to start chatting\n");
 
-    // 创建线程接收消息
+    //Create a thread to receive messages
     if (pthread_create(&thread_id, NULL, receive_messages, (void *)&client_socket) < 0) {
-        perror("无法创建线程");
+        perror("Unable to create thread");
         close(client_socket);
         return 1;
     }
 
-    // 发送消息
+    //Send message
     while (1) {
         fgets(message, BUFFER_SIZE, stdin);
         message[strcspn(message, "\n")] = 0;
         send(client_socket, message, strlen(message), 0);
     }
 
+    close(client_socket);
+    return 0;
+}
     close(client_socket);
     return 0;
 }
