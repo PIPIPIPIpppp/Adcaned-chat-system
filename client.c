@@ -4,8 +4,57 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <openssl/sha.h>
+#include <openssl/evp.h>
+#include <cjson/cJSON.h>
 
 #define BUFFER_SIZE 1024
+
+// Function to sign data using SHA256 and RSA key (it is unfinished)
+unsigned char *sign_data() {
+
+}
+
+void *send_messages(int client_socket, string message, int flags) {
+    // Creating the JSON structure
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "type", "signed_data");
+    cJSON *data_obj = cJSON_CreateObject();
+    cJSON_AddItemToObject(root, "data", data_obj);  // Empty data object
+    int counter = 12345;
+    cJSON_AddNumberToObject(root, "counter", counter);
+
+    //Turns counter to string
+    char counter_str[10];
+    snprintf(counter_str, sizeof(counter_str), "%d", counter);
+
+    char *data_json_str = cJSON_Print(data_obj);  // Convert "data" object to JSON string
+    size_t data_len = strlen(data_json_str) + strlen(counter_str);
+
+    char *to_sign = (char *)malloc(data_len + 1);
+    snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str);
+
+    // Sign the data with a private key
+    unsigned char *signature = sign_data((unsigned char *)to_sign);
+    if (!signature) {
+        fprintf(stderr, "Failed to sign data\n");
+        return 1;
+    }
+
+    //When it is a hello message, the public key is added to data
+    if(message == "hello"){
+        cJSON_AddStringToObject(data_obj, "type", hello);
+        cJSON_AddStringToObject(data_obj, "public_key", public_key);
+    }
+
+    // Base64 encode the signature
+
+
+    // return final JSON
+    char *final_json_str[BUFFER_SIZE];
+    final_json_str = cJSON_Print(root);
+    send(client_socket, final_json_str, strlen(final_json_str), flags);
+}
 
 void *receive_messages(void *arg) {
     int socket = *(int *)arg;
@@ -47,7 +96,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Ready for sockaddr_in structure 
+    // Ready for sockaddr_in structure
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
@@ -73,7 +122,10 @@ int main(int argc, char *argv[]) {
     recv(client_socket, online_users, BUFFER_SIZE, 0);
     printf("Current online: %s\n", online_users);
 
-    printf("Welcome to the channle, ready to start chatting\n");
+    //Send 'hello' message to server
+    send_messages(client_socket, "hello", 0);
+
+    printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
     if (pthread_create(&thread_id, NULL, receive_messages, (void *)&client_socket) < 0) {
@@ -95,4 +147,3 @@ int main(int argc, char *argv[]) {
     close(client_socket);
     return 0;
 }
-
