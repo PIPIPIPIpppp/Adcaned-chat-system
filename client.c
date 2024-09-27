@@ -6,13 +6,55 @@
 #include <pthread.h>
 #include <openssl/sha.h>
 #include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
 #include <cjson/cJSON.h>
 
 #define BUFFER_SIZE 1024
+#define SHA256_DIGEST_LENGTH 32
 
 // Function to sign data using SHA256 and RSA key (it is unfinished)
 unsigned char *sign_data() {
+    int ret = 0;
+    SHA256_CTX sha = SHA256_Init();
+    ret = SHA256(data, strlen(data), SHA256_DIGEST_LENGTH);
 
+    if(ret != 1){
+        perror("Failed to SHA256 the data");
+	}
+}
+
+EVP_PKEY generate_RSA_keys(){
+    int ret = 0;
+    RSA	*r = NULL;
+	BIGNUM *bne = NULL;
+    EVP_PKEY *pkeys;
+    pkeys = EVP_PKEY_new();
+
+    unsigned long e = 65537;
+    
+    //Generate keys
+    bne = BN_new();
+	ret = BN_set_word(bne,e);
+	if(ret != 1){
+        perror("Failed to create BIGNUM");
+	}
+
+    r = RSA_new();
+	ret = RSA_generate_key_ex(r, bits, bne, NULL);
+	if(ret != 1){
+        perror("Failed to generate keys");
+	}
+
+    ret = EVP_PKEY_assign_RSA(pkeys, r);
+    if(ret != 1){
+        perror("Failed to assign RSA to EVP");
+	}
+
+    RSA_free(r);
+    BN_free(bne);
+
+    return pkeys;
 }
 
 void *send_messages(int client_socket, string message, int flags) {
@@ -23,6 +65,16 @@ void *send_messages(int client_socket, string message, int flags) {
     cJSON_AddItemToObject(root, "data", data_obj);  // Empty data object
     int counter = 12345;
     cJSON_AddNumberToObject(root, "counter", counter);
+
+    EVP_PKEY *pkeys;
+    pkeys = EVP_PKEY_new();
+    pkeys = generate_RSA_keys;
+
+    //When it is a hello message, the public key is added to data
+    if(message == "hello"){
+        cJSON_AddStringToObject(data_obj, "type", hello);
+        cJSON_AddStringToObject(data_obj, "public_key", public_key);
+    }
 
     //Turns counter to string
     char counter_str[10];
@@ -39,12 +91,6 @@ void *send_messages(int client_socket, string message, int flags) {
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
-    }
-
-    //When it is a hello message, the public key is added to data
-    if(message == "hello"){
-        cJSON_AddStringToObject(data_obj, "type", hello);
-        cJSON_AddStringToObject(data_obj, "public_key", public_key);
     }
 
     // Base64 encode the signature
