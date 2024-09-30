@@ -20,8 +20,8 @@ const char base64_chars[] =
     "0123456789+/";
 static const int mod_table[] = {0, 2, 1};
 
-char *base64_encode(const unsigned char *data, size_t input_length, size_t *output_length) {
-    *output_length = 4 * ((input_length + 2) / 3);
+char *base64_encode(const unsigned char *data, size_t input_length) {
+    size_t *output_length = 4 * ((input_length + 2) / 3);
     char *encoded_data = malloc(*output_length + 1);
     if (encoded_data == NULL) return NULL;
 
@@ -44,6 +44,7 @@ char *base64_encode(const unsigned char *data, size_t input_length, size_t *outp
     encoded_data[*output_length] = '\0';
     return encoded_data;
 }
+
 unsigned char *base64_decode(const char *data, size_t input_length, size_t *output_length) {
     if (input_length % 4 != 0) return NULL;
 
@@ -70,6 +71,7 @@ unsigned char *base64_decode(const char *data, size_t input_length, size_t *outp
     decoded_data[*output_length] = '\0';  // Make sure the string ends with a null terminator
     return decoded_data;
 }
+
 // Function to sign data using SHA256 and RSA key
 unsigned char *sign_data(EVP_PKEY *private_key, const unsigned char *data_counter, size_t data_len) {
     int ret = 0;
@@ -106,7 +108,8 @@ char *create_fingerprint(EVP_PKEY *public_key){
     SHA256((unsigned char *)pem_key, strlen(pem_key), hash);
 
     //Base64 encode the hash to create the fingerprint
-    char *fingerprint = base64(hash, SHA256_DIGEST_LENGTH);
+    size_t input_length = SHA256_DIGEST_LENGTH;
+    char *fingerprint = base64_encode(hash, input_length, input_length);
 
     BIO_free(bio);
     free(pem_key);
@@ -174,8 +177,6 @@ void *send_messages(int client_socket, string message, int flags) {
     }else if(){ //Private Chat
 
     }
-
-
 
     //Turns counter to string
     char counter_str[10];
