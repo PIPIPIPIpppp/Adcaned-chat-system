@@ -168,7 +168,32 @@ void *receive_messages(void *arg) {
 
     while ((read_size = recv(socket, buffer, BUFFER_SIZE, 0)) > 0) {
         buffer[read_size] = '\0';
-        printf("%s\n", buffer);
+	// Find the message body location
+        char *colon_pos = strrchr(buffer, ':');
+        if (colon_pos) {
+            char header[BUFFER_SIZE];
+            int header_length = colon_pos - buffer + 1;  // include ""
+            strncpy(header, buffer, header_length);
+            header[header_length] = '\0';
+
+            // Extract and decode the message content
+            char *encoded_message = colon_pos + 1;
+            while (*encoded_message == ' ') {
+                encoded_message++;
+            }
+
+            size_t output_length;
+            unsigned char *decoded_message = base64_decode(encoded_message, strlen(encoded_message), &output_length);
+
+            if (decoded_message) {
+                decoded_message[output_length] = '\0'; // end correctly 
+                printf("%s %s\n", header, decoded_message);
+                free(decoded_message);
+            }
+        } else {
+            // When there is no colon, it is a system message.
+            printf("system message: %s\n", buffer);
+        }
     }
 
     if (read_size == 0) {
@@ -243,12 +268,14 @@ int main(int argc, char *argv[]) {
     while (1) {
         fgets(message, BUFFER_SIZE, stdin);
         message[strcspn(message, "\n")] = 0;
-        send(client_socket, message, strlen(message), 0);
-    }
 
-    close(client_socket);
-    return 0;
-}
+        size_t encoded_length;
+        char *encoded_message = base64_encode((unsigned char *)message, strlen(message), &encoded_length);
+        if (encoded_message) {
+            send(client_socket, encoded_message, encoded_length, 0);
+            free(encoded_message);
+        }
+    }
     close(client_socket);
     return 0;
 }
