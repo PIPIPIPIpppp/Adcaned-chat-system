@@ -8,20 +8,54 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
+#include <openssl/bio.h>
 #include <cjson/cJSON.h>
 
 #define BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
 
-// Function to sign data using SHA256 and RSA key (it is unfinished)
-unsigned char *sign_data() {
+// Function to sign data using SHA256 and RSA key
+unsigned char *sign_data(EVP_PKEY *private_key, const unsigned char *data_counter, size_t data_len) {
     int ret = 0;
-    SHA256_CTX sha = SHA256_Init();
-    ret = SHA256(data, strlen(data), SHA256_DIGEST_LENGTH);
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    unsigned char *signature = malloc(EVP_PKEY_size(private_key));
 
-    if(ret != 1){
-        perror("Failed to SHA256 the data");
-	}
+    EVP_SignInit(mdctx, EVP_sha256());
+    EVP_SignUpdate(mdctx, data_counter, data_len);
+    if (EVP_SignFinal(mdctx, signature, 32, private_key) != 1) {
+        free(signature);
+        EVP_MD_CTX_free(mdctx);
+        perror("Failed to create signature");
+        return NULL; // Error
+    }
+
+    EVP_MD_CTX_free(mdctx);
+    return signature;
+}
+
+//Function to create the fingerprint from the RSA public key
+char *create_fingerprint(EVP_PKEY *public_key){
+    //Export the public key to PEM format
+    BIO *bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PUBKEY(bio, public_key);
+    
+    //Get the length of the PEM data
+    size_t pem_length = BIO_ctrl_pending(bio);
+    char *pem_key = (char *)malloc(pem_length + 1);
+    BIO_read(bio, pem_key, pem_length);
+    pem_key[pem_length] = '\0'; // Null-terminate
+
+    //Hash the PEM key using SHA-256
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char *)pem_key, strlen(pem_key), hash);
+
+    //Base64 encode the hash to create the fingerprint
+    char *fingerprint = base64(hash, SHA256_DIGEST_LENGTH);
+
+    BIO_free(bio);
+    free(pem_key);
+
+    return fingerprint;
 }
 
 EVP_PKEY generate_RSA_keys(){
@@ -69,28 +103,39 @@ void *send_messages(int client_socket, string message, int flags) {
     //Generate keys and extract public key
     EVP_PKEY *pkeys;
     pkeys = EVP_PKEY_new();
-    pkeys = generate_RSA_keys;
+    pkeys = generate_RSA_keys();
     unsigned char *public_key;
     EVP_PKEY_get_raw_public_key(pkeys, public_key, 32);
 
-    //When it is a hello message, the public key is added to data
-    if(message == "hello"){
+    //Determine what message type it is
+    if(message == "hello"){ //When it is a hello message, the public key is added to data
         cJSON_AddStringToObject(data_obj, "type", hello);
         cJSON_AddStringToObject(data_obj, "public_key", public_key);
+    }else if(){ //Public Chat
+        cJSON_AddStringToObject(data_obj, "type", public_chat);
+        cJSON_AddStringToObject(data_obj, "sender", fingerprint);
+        cJSON_AddStringToObject(data_obj, "message", message);
+    }else if(){ //Private Chat
+
     }
+
+
 
     //Turns counter to string
     char counter_str[10];
     snprintf(counter_str, sizeof(counter_str), "%d", counter);
 
     char *data_json_str = cJSON_Print(data_obj);  // Convert "data" object to JSON string
-    size_t data_len = strlen(data_json_str) + strlen(counter_str);
+    size_t data_len = strlen(data_json_str) + strlen(counter_str); 
 
     char *to_sign = (char *)malloc(data_len + 1);
-    snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str);
+    snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str); //concatenate data and counter
 
     // Sign the data with a private key
-    unsigned char *signature = sign_data((unsigned char *)to_sign);
+    unsigned char *private_key;
+    EVP_PKEY_get_raw_private_key(pkeys, private_key, 32);
+
+    unsigned char *signature = sign_date(private_key, to_sign, data_len + 1);
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
@@ -118,8 +163,15 @@ void *receive_messages(void *arg) {
     if (read_size == 0) {
         printf("Server is disconnect\n");
         fflush(stdout);
+        return;
     } else if (read_size == -1) {
         perror("Fail to recieve");
+        return;
+    }
+
+    cJSON *json = cJSON_Parse(buffer);
+    if(json){
+        //This needs to be finished
     }
 
     return NULL;
