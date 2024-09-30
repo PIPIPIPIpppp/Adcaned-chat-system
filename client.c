@@ -45,10 +45,10 @@ char *base64_encode(const unsigned char *data, size_t input_length) {
     return encoded_data;
 }
 
-unsigned char *base64_decode(const char *data, size_t input_length, size_t *output_length) {
+unsigned char *base64_decode(const char *data, size_t input_length) {
     if (input_length % 4 != 0) return NULL;
 
-    *output_length = input_length / 4 * 3;
+    size_t *output_length = input_length / 4 * 3;
     if (data[input_length - 1] == '=') (*output_length)--;
     if (data[input_length - 2] == '=') (*output_length)--;
 
@@ -92,7 +92,7 @@ unsigned char *sign_data(EVP_PKEY *private_key, const unsigned char *data_counte
 }
 
 //Function to create the fingerprint from the RSA public key
-char *create_fingerprint(EVP_PKEY *public_key){
+unsigned char *create_fingerprint(EVP_PKEY *public_key){
     //Export the public key to PEM format
     BIO *bio = BIO_new(BIO_s_mem());
     PEM_write_bio_PUBKEY(bio, public_key);
@@ -109,7 +109,7 @@ char *create_fingerprint(EVP_PKEY *public_key){
 
     //Base64 encode the hash to create the fingerprint
     size_t input_length = SHA256_DIGEST_LENGTH;
-    char *fingerprint = base64_encode(hash, input_length, input_length);
+    unsigned char *fingerprint = base64_encode(hash, input_length, input_length);
 
     BIO_free(bio);
     free(pem_key);
@@ -163,20 +163,46 @@ void *send_messages(int client_socket, string message, int flags) {
     EVP_PKEY *pkeys;
     pkeys = EVP_PKEY_new();
     pkeys = generate_RSA_keys();
-    unsigned char *public_key;
+    unsigned char *public_key; 
     EVP_PKEY_get_raw_public_key(pkeys, public_key, 32);
 
     //Determine what message type it is
     if(message == "hello"){ //When it is a hello message, the public key is added to data
-        cJSON_AddStringToObject(data_obj, "type", hello);
+        cJSON_AddStringToObject(data_obj, "type", "hello");
         cJSON_AddStringToObject(data_obj, "public_key", public_key);
     }else if(){ //Public Chat
-        cJSON_AddStringToObject(data_obj, "type", public_chat);
+        cJSON_AddStringToObject(data_obj, "type", "public_chat");
+        unsigned char fingerprint = create_fingerprint(public_key);
         cJSON_AddStringToObject(data_obj, "sender", fingerprint);
         cJSON_AddStringToObject(data_obj, "message", message);
     }else if(){ //Private Chat
+        cJSON_AddStringToObject(data_obj, "type", "chat");
+        dest_servers = json_object_new_array();
+        for(/*amount of servers*/){
+            json_object_array_add(dest_servers, json_object_new_int('Address of each recipients destination server'));  
+        }
+        json_object_object_add(data_obj, "destination_servers", dest_servers);
+        
+        cJSON_AddStringToObject(data_obj, "iv", "<Base64 encoded (AES initialisation vector)>");
+        
+        recip_symm_keys = json_object_new_array();
+        for(/*amount of recipients*/ ){
+            json_object_array_add(recip_symm_keys, json_object_new_int("<Base64 encoded (AES key encrypted with recipient's public RSA key)>"));  
+        }
+        json_object_object_add(data_obj, "symm_keys", recip_symm_keys);
 
-    }
+        cJSON *chat = cJSON_CreateObject(); //THIS NEEDS TO BE ENCRYPTED!
+        all_participants = json_object_new_array();
+        json_object_array_add(all_participants, json_object_new_string("This clients Fingerprint"));
+        for(/*amount of recipients*/ ){
+            json_object_array_add(all_participants, json_object_new_string("all other fingerprints"));  
+        }
+        json_object_object_add(data_obj, "symm_keys", recip_symm_keys);
+
+        cJSON_AddStringToObject(chat, "message", message);
+
+        json_object_object_add(data_obj, "chat", chat);
+    }   
 
     //Turns counter to string
     char counter_str[10];
@@ -198,8 +224,9 @@ void *send_messages(int client_socket, string message, int flags) {
         return 1;
     }
 
-    // Base64 encode the signature
-
+    // Base64 encode the signature and add to 
+    unsigned char encoded_sign = base64_encode(signature, data_len);
+    cJSON_AddStringToObject(root, "signature", encoded_sign);
 
     // return final JSON
     char *final_json_str[BUFFER_SIZE];
