@@ -66,9 +66,12 @@ void *send_messages(int client_socket, string message, int flags) {
     int counter = 12345;
     cJSON_AddNumberToObject(root, "counter", counter);
 
+    //Generate keys and extract public key
     EVP_PKEY *pkeys;
     pkeys = EVP_PKEY_new();
     pkeys = generate_RSA_keys;
+    unsigned char *public_key;
+    EVP_PKEY_get_raw_public_key(pkeys, public_key, 32);
 
     //When it is a hello message, the public key is added to data
     if(message == "hello"){
