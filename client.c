@@ -66,7 +66,7 @@ unsigned char *base64_decode(const char *data, size_t input_length) {
         if (j < *output_length) decoded_data[j++] = (triple >> 16) & 0xFF;
         if (j < *output_length) decoded_data[j++] = (triple >> 8) & 0xFF;
         if (j < *output_length) decoded_data[j++] = (triple >> 0) & 0xFF;
-    }
+    }                                                                                                                                      
 
     decoded_data[*output_length] = '\0';  // Make sure the string ends with a null terminator
     return decoded_data;
@@ -150,6 +150,31 @@ EVP_PKEY generate_RSA_keys(){
     return pkeys;
 }
 
+int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv, unsigned char *ciphertext, unsigned char *tag){
+    EVP_CIPHER_CTX *ctx;
+    int plaintext_len = strlen((char*) plaintext)
+    int len;
+    int ciphertext_len;
+
+    ctx = EVP_CIPHER_CTX_new(); //Create the context
+
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL); //Setting IV Length to 16 bytes
+
+    EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv); //Initialise the Encryption
+
+    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len); //Encrypt the plaintext
+    ciphertext_len = len;
+    
+    EVP_EncryptFinal_ex(ctx, ciphertext + len, &len); //Finalize encryption
+    ciphertext_len += len;
+
+    EVP_CIPHER_CTX_crtl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
+
+    EVP_CIPHER_CTX_free(ctx); //Clean up
+
+    return ciphertext_len;
+}
+
 void *send_messages(int client_socket, string message, int flags) {
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
@@ -166,40 +191,54 @@ void *send_messages(int client_socket, string message, int flags) {
     unsigned char *public_key; 
     EVP_PKEY_get_raw_public_key(pkeys, public_key, 32);
 
+    char *MessageType; 
+ 
+    //Use strtok to extract the first word 
+    MessageType = strtok(str, " ");
+
+    unsigned char fingerprint = create_fingerprint(public_key);
+
     //Determine what message type it is
-    if(message == "hello"){ //When it is a hello message, the public key is added to data
+    if(MessageType == "hello"){ //When it is a hello message, the public key is added to data
         cJSON_AddStringToObject(data_obj, "type", "hello");
         cJSON_AddStringToObject(data_obj, "public_key", public_key);
-    }else if(){ //Public Chat
+    }else if(MessageType == "Public"){ //Public Chat
         cJSON_AddStringToObject(data_obj, "type", "public_chat");
-        unsigned char fingerprint = create_fingerprint(public_key);
         cJSON_AddStringToObject(data_obj, "sender", fingerprint);
         cJSON_AddStringToObject(data_obj, "message", message);
-    }else if(){ //Private Chat
+    }else if(MessageType == "Private"){ //Private Chat
         cJSON_AddStringToObject(data_obj, "type", "chat");
+        
+        cJSON *chat = cJSON_CreateObject(); 
+        all_participants = json_object_new_array();
+        json_object_array_add(all_participants, json_object_new_string(fingerprint));
+        for(/*amount of recipients*/){
+            json_object_array_add(all_participants, json_object_new_string("all other fingerprints"));  
+        }
+        json_object_object_add(data_obj, "symm_keys", recip_symm_keys);
+
+        cJSON_AddStringToObject(chat, "message", message);
+
+        unsigned char* key, iv, ciphertext, tag;
+        char *chat_json_str = cJSON_Print(chat); //Convert cJSON to string
+
+        //Encrypt and convert back to cJSON
+        AES_Encrypt(chat_json_str, key, iv, ciphertext, tag); 
+        chat = cJSON_Parse(chat_json_str);
+
         dest_servers = json_object_new_array();
         for(/*amount of servers*/){
             json_object_array_add(dest_servers, json_object_new_int('Address of each recipients destination server'));  
         }
         json_object_object_add(data_obj, "destination_servers", dest_servers);
         
-        cJSON_AddStringToObject(data_obj, "iv", "<Base64 encoded (AES initialisation vector)>");
+        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv));
         
         recip_symm_keys = json_object_new_array();
         for(/*amount of recipients*/ ){
             json_object_array_add(recip_symm_keys, json_object_new_int("<Base64 encoded (AES key encrypted with recipient's public RSA key)>"));  
         }
         json_object_object_add(data_obj, "symm_keys", recip_symm_keys);
-
-        cJSON *chat = cJSON_CreateObject(); //THIS NEEDS TO BE ENCRYPTED!
-        all_participants = json_object_new_array();
-        json_object_array_add(all_participants, json_object_new_string("This clients Fingerprint"));
-        for(/*amount of recipients*/ ){
-            json_object_array_add(all_participants, json_object_new_string("all other fingerprints"));  
-        }
-        json_object_object_add(data_obj, "symm_keys", recip_symm_keys);
-
-        cJSON_AddStringToObject(chat, "message", message);
 
         json_object_object_add(data_obj, "chat", chat);
     }   
@@ -208,13 +247,13 @@ void *send_messages(int client_socket, string message, int flags) {
     char counter_str[10];
     snprintf(counter_str, sizeof(counter_str), "%d", counter);
 
-    char *data_json_str = cJSON_Print(data_obj);  // Convert "data" object to JSON string
+    char *data_json_str = cJSON_Print(data_obj);  //Convert "data" object to JSON string
     size_t data_len = strlen(data_json_str) + strlen(counter_str); 
 
     char *to_sign = (char *)malloc(data_len + 1);
-    snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str); //concatenate data and counter
+    snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str); //Concatenate data and counter
 
-    // Sign the data with a private key
+    //Sign the data with a private key
     unsigned char *private_key;
     EVP_PKEY_get_raw_private_key(pkeys, private_key, 32);
 
@@ -224,11 +263,11 @@ void *send_messages(int client_socket, string message, int flags) {
         return 1;
     }
 
-    // Base64 encode the signature and add to 
+    //Base64 encode the signature and add to 
     unsigned char encoded_sign = base64_encode(signature, data_len);
     cJSON_AddStringToObject(root, "signature", encoded_sign);
 
-    // return final JSON
+    //Return final JSON
     char *final_json_str[BUFFER_SIZE];
     final_json_str = cJSON_Print(root);
     send(client_socket, final_json_str, strlen(final_json_str), flags);
@@ -338,7 +377,7 @@ int main(int argc, char *argv[]) {
     printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
-    if (pthread_create(&thread_id, NULL, receive_messages, (void *)&client_socket) < 0) {
+    if (pthread_create(&thread_id, NULL, receive_messages(), (void *)&client_socket) < 0) {
         perror("Unable to create thread");
         close(client_socket);
         return 1;
@@ -350,9 +389,8 @@ int main(int argc, char *argv[]) {
         message[strcspn(message, "\n")] = 0;
 
         size_t encoded_length;
-        char *encoded_message = base64_encode((unsigned char *)message, strlen(message), &encoded_length);
-        if (encoded_message) {
-            send(client_socket, encoded_message, encoded_length, 0);
+        if(message){
+            send_messages(client_socket, encoded_message, encoded_length, 0);
             free(encoded_message);
         }
     }
