@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <time.h>
+#include <openssl/sha.h>
 
 #define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
@@ -12,6 +13,9 @@
 typedef struct {
     int socket;
     char username[50];
+    char password_hash[SHA256_DIGEST_LENGTH]; // aray to hold hashed password
+    char salt[16]; // for password
+    int session_token[64]; // session handling
 } Client;
 
 typedef struct {
@@ -124,6 +128,124 @@ void *handle_client(void *arg) {
     client_count--;
     pthread_mutex_unlock(&mutex);
 
+    close(client_socket);
+    return NULL;
+}
+
+// creates a secure random salt
+void create_salt(char *salt, size_t length) {
+    RAND_bytes(salt, length); 
+}
+
+// store hash
+void hash_pass_salted(const char *password, const char *salt, const char *hash) {
+    char salted_pass[BUFFER_SIZE + 16];
+    memcpy(salted_pass, password, strlen(password));
+    memcpy(salted_pass + strlen(password) + salt, 16);
+
+    SHA256(salted_pass, strlen (password) + 16, hash);
+}
+
+// create a session token after login
+void generate_session_token(char *token, size_t length){
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    srand(time(NULL));
+    for (size_t i = 0; i < length; i++) {
+        int key = rand() % (int)(sizeof(charset) - 1);
+        token[i] = charset[key];
+    }
+    token[length] = '\0';
+}
+
+//validates session token
+int validate_session (const char *token) {
+    pthread_mutex_lock(&mutex);
+    for (int i = 0; i < client_count; i++){
+        if (strcmp(clients[i]. session_token, token) == 0) {
+            pthread_mutex_unlock(&mutex);
+            return i; //valid session
+        }
+    }
+    pthread_mutex_unlock(&mutex);
+    return -1; //invalid session
+}    
+
+//create salt and hash password and store username
+int register_user(const char *username, const char *password, int client_index) {
+    create_salt(clients[client_index].salt, 16);
+    hash_pass_salted(password, clients[client_index].ssalt, clients[client_index].password_hash);
+    strcpy(clients[client_index]. username, username);
+    return 0;
+}
+
+int authenticate_user(const char *username, const char *password, char *session_token, int client_index) {
+    char input_hash[SHA256_DIGEST_LENGTH];
+
+    //find user
+    for (int i = 0; i < client_count; i++) {
+        if (strcmp(clients[i].username, username) == 0) {
+            hash_pass_salted(password, clients[i].salt, input_hash);
+            if (memcmp(clients[i].password_hash, input_hash, SHA256_DIGEST_LENGTH) == 0) {
+                generate_session_token(clients[i]. session_token, 64);
+                strcpy(session_token, clients[i].session_token);
+                return i;
+            }
+            else {
+                return -1; //incorrect password
+            }
+        }
+    }
+    return -1; //if user not found
+}
+
+//add logic to authenticate user when connecting
+void *handle_client(void *arg) {
+    ThreadArg * thread_arg = (ThreadArg *)arg;
+    int client_socket = thread_arg->socket;
+    int client_index = thread_Arg->index;
+    free(thread_arg);
+
+    char buffer[BUFFER_SIZE];
+    char session_token[64];
+    int read_size;
+
+    //recieve user name nad password for login or registration
+    read_size - recv(client_socket, buffer, BUFFER_SIZE, 0);
+    if (read_size <= 0) {
+        close(client_socket);
+        return NULL;
+    }
+    buffer[read_size] = '\0';
+
+    char command[10], username[50], password[50];
+    sscanf(buffer, "%s, %s, %s", command, username, password);
+
+    if strcmp(command, "REGISTER" == 0) {
+        if (register_user(username, password, client_index) == 0) {
+            send(client_socket, "Registration successful", 24, 0);
+        }
+    else if (strcmp(command, "LOGIN") == 0) {
+        if (authenticate_user(username, password, session_token, client_index) >= 0){
+             send(client_socket, session_token, strlen(session_token), 0);
+        }
+        else {
+            send(client_socket, "Authentication failed", 22, 0);
+            close(client_socket);
+            return NULL;
+        }
+    }
+    //handling messagess and valoidate session token
+    while ((read_size = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+        buffer[read_size] = '\0';
+        char received_token[64];
+        sscanf(buffer, "%s", received_token);
+
+        if (validate_session(received_token) < 0) {
+            send(client_socket, "Invalid session", 16, 0);
+            continue;
+        }
+    }
+    //terminate session
     close(client_socket);
     return NULL;
 }
