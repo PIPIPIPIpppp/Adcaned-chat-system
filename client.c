@@ -274,7 +274,8 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
 
         //Encrypt and convert back to cJSON
         AES_Encrypt(chat_json_str, key, iv, ciphertext, tag); 
-        chat_json_str = base64_encode(chat_json_str);
+        size_t length = strlen(chat_json_str);
+        chat_json_str = base64_encode(chat_json_str, length);
         chat = cJSON_Parse(chat_json_str);
 
         //Adding Symm_keys
