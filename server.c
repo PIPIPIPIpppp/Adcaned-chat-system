@@ -39,6 +39,10 @@ typedef struct {
     int port;
 } Server;
 
+char *spam_words[MAX_WORDS] = {
+    "shift", "Go to hell", "Dumb", "Fuck you", "Son of a beach",
+    "You stupid jerk", "Drop dead", "You bastard", "Get lost"};
+
 Client clients[MAX_CLIENTS];
 int client_count = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -60,6 +64,21 @@ void log_message(const char *message) {
         fclose(log_file);
     }
     pthread_mutex_unlock(&log_mutex);
+}
+bool is_spam_message(const char *message)
+{
+    for (int i = 0; i < MAX_WORDS; i++)
+    {
+        if (strstr(message, spam_words[i]) != NULL)
+        {
+            return true;
+        }
+    }
+    if (strlen(message) > 1000)
+    {
+        return true;
+    }
+    return false;
 }
 
 void broadcast_message(const char *message, int sender_socket) {
