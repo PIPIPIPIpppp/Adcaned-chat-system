@@ -31,7 +31,7 @@ typedef struct {
 typedef struct {
     int socket;
     int index;
-} ThreadArg;
+} Server;
 
 Client clients[MAX_CLIENTS];
 int client_count = 0;
@@ -81,7 +81,7 @@ void send_online_users(int new_client_socket) {
 }
 
 void *handle_client(void *arg) {
-    ThreadArg *thread_arg = (ThreadArg *)arg;
+    Server *thread_arg = (Server *)arg;
     int client_socket = thread_arg->socket;
     int client_index = thread_arg->index;
     free(thread_arg);
@@ -210,7 +210,7 @@ int authenticate_user(const char *username, const char *password, char *session_
 
 //add logic to authenticate user when connecting
 void *handle_client(void *arg) {
-    ThreadArg * thread_arg = (ThreadArg *)arg;
+    Server * thread_arg = (Server *)arg;
     int client_socket = thread_arg->socket;
     int client_index = thread_Arg->index;
     free(thread_arg);
@@ -298,7 +298,7 @@ int main(int argc, char *argv[]) {
     while ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_len))) {
         printf("connection recieved\n");
 
-        ThreadArg *thread_arg = malloc(sizeof(ThreadArg));
+        Server *thread_arg = malloc(sizeof(Server));
         thread_arg->socket = client_socket;
         thread_arg->index = client_count;
 
@@ -328,4 +328,3 @@ int main(int argc, char *argv[]) {
     close(server_socket);
     return 0;
 }
-
