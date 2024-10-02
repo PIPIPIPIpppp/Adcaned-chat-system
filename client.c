@@ -247,6 +247,8 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
 
     unsigned char fingerprint = create_fingerprint(public_key); //Get fingerprint
 
+    char *MessageType;
+    MessageType = "hello";
 
     //Determine what message type it is
     if(MessageType == "hello"){ //When it is a hello message, the public key is added to data
