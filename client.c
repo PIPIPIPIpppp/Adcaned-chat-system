@@ -329,6 +329,8 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
 
     unsigned char fingerprint = create_fingerprint(public_key); //Get fingerprint
 
+    char *MessageType;
+    MessageType = "hello";
 
     //Determine what message type it is
     if(messageType == "hello"){ //When it is a hello message, the public key is added to data
@@ -362,7 +364,8 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
 
         //Encrypt and convert back to cJSON
         AES_Encrypt(chat_json_str, key, iv, ciphertext, tag); 
-        chat_json_str = base64_encode(chat_json_str);
+        size_t length = strlen(chat_json_str);
+        chat_json_str = base64_encode(chat_json_str, length);
         chat = cJSON_Parse(chat_json_str);
 
         //Adding Symm_keys
@@ -385,7 +388,7 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
 
                 EVP_PKEY_CTX_free(ctx); // Clean up the context
 
-                char encrypted_key_encoded = base64_encode(encrypted_key);
+                char encrypted_key_encoded = base64_encode(encrypted_key, encrypted_key_len);
 
                 json_object_array_add(symm_keys_array, encrypted_key_encoded);
             }
