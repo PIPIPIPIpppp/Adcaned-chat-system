@@ -1,11 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <pthread.h>
 #include <time.h>
 #include <openssl/sha.h>
+
+#ifdef _WIN32  // Windows
+    #include <winsock2.h>
+    #include <Ws2tcpip.h>
+    #include <windows.h>
+    #pragma comment(lib, "Ws2_32.lib")
+#else  // Linux/Unix
+    #include <unistd.h>
+    #include <arpa/inet.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <pthread.h>
+#endif
 
 #define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
