@@ -12,6 +12,7 @@
     #include <winsock2.h>
     #include <Ws2tcpip.h>
     #include <windows.h>
+    typedef HANDLE pthread_t;
     #pragma comment(lib, "Ws2_32.lib")
 #else  // Linux/Unix
     #include <unistd.h>
@@ -31,8 +32,8 @@ const char base64_chars[] =
 static const int mod_table[] = {0, 2, 1};
 
 char *base64_encode(const unsigned char *data, size_t input_length) {
-    size_t *output_length = 4 * ((input_length + 2) / 3);
-    char *encoded_data = malloc(*output_length + 1);
+    size_t output_length = 4 * ((input_length + 2) / 3);
+    char *encoded_data = malloc(output_length + 1);
     if (encoded_data == NULL) return NULL;
 
     for (int i = 0, j = 0; i < input_length;) {
@@ -49,20 +50,20 @@ char *base64_encode(const unsigned char *data, size_t input_length) {
     }
 
     for (int i = 0; i < mod_table[input_length % 3]; i++)
-        encoded_data[*output_length - 1 - i] = '=';
+        encoded_data[output_length - 1 - i] = '=';
 
-    encoded_data[*output_length] = '\0';
+    encoded_data[output_length] = '\0';
     return encoded_data;
 }
 
 unsigned char *base64_decode(const char *data, size_t input_length) {
     if (input_length % 4 != 0) return NULL;
 
-    size_t *output_length = input_length / 4 * 3;
-    if (data[input_length - 1] == '=') (*output_length)--;
-    if (data[input_length - 2] == '=') (*output_length)--;
+    size_t output_length = input_length / 4 * 3;
+    if (data[input_length - 1] == '=') (output_length)--;
+    if (data[input_length - 2] == '=') (output_length)--;
 
-    unsigned char *decoded_data = malloc(*output_length + 1);
+    unsigned char *decoded_data = malloc(output_length + 1);
     if (decoded_data == NULL) return NULL;
 
     for (int i = 0, j = 0; i < input_length;) {
@@ -73,12 +74,12 @@ unsigned char *base64_decode(const char *data, size_t input_length) {
 
         uint32_t triple = (sextet_a << 18) + (sextet_b << 12) + (sextet_c << 6) + sextet_d;
 
-        if (j < *output_length) decoded_data[j++] = (triple >> 16) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 8) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 0) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 16) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 8) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 0) & 0xFF;
     }                                                                                                                                      
 
-    decoded_data[*output_length] = '\0';  // Make sure the string ends with a null terminator
+    decoded_data[output_length] = '\0';  // Make sure the string ends with a null terminator
     return decoded_data;
 }
 
@@ -119,7 +120,7 @@ unsigned char *create_fingerprint(EVP_PKEY *public_key){
 
     //Base64 encode the hash to create the fingerprint
     size_t input_length = SHA256_DIGEST_LENGTH;
-    unsigned char *fingerprint = base64_encode(hash, input_length, input_length);
+    unsigned char *fingerprint = base64_encode(hash, input_length);
 
     BIO_free(bio);
     free(pem_key);
@@ -127,7 +128,7 @@ unsigned char *create_fingerprint(EVP_PKEY *public_key){
     return fingerprint;
 }
 
-EVP_PKEY generate_RSA_keys(){
+EVP_PKEY* generate_RSA_keys(){
     int ret = 0;
     RSA	*r = NULL;
 	BIGNUM *bne = NULL;
@@ -135,6 +136,7 @@ EVP_PKEY generate_RSA_keys(){
     pkeys = EVP_PKEY_new();
 
     unsigned long e = 65537;
+     int bits = 2048;  //key length
     
     //Generate keys
     bne = BN_new();
@@ -162,7 +164,7 @@ EVP_PKEY generate_RSA_keys(){
 
 int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv, unsigned char *ciphertext, unsigned char *tag){
     EVP_CIPHER_CTX *ctx;
-    int plaintext_len = strlen((char*) plaintext)
+    int plaintext_len = strlen((char*) plaintext);
     int len;
     int ciphertext_len;
 
@@ -178,14 +180,17 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     EVP_EncryptFinal_ex(ctx, ciphertext + len, &len); //Finalize encryption
     ciphertext_len += len;
 
-    EVP_CIPHER_CTX_crtl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
 
     EVP_CIPHER_CTX_free(ctx); //Clean up
 
     return ciphertext_len;
 }
 
-void *send_messages(int client_socket, char message, char messageType, char recipients, char *client_info, int flags) {
+void *send_messages(int client_socket, char* message, int flags) {
+    int num_recipients = 1; // TO COMPLETE
+    int num_servers = 1; // TO COMPLETE
+
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "signed_data");
@@ -198,46 +203,19 @@ void *send_messages(int client_socket, char message, char messageType, char reci
     EVP_PKEY *pkeys;
     pkeys = EVP_PKEY_new();
     pkeys = generate_RSA_keys();
-    unsigned char *public_key;
+    unsigned char *public_key; 
     EVP_PKEY_get_raw_public_key(pkeys, public_key, 32);
 
-    //Get list of recipients info
-    ClientInfo *info = receive_client_list_response(client_socket);
-    ClientInfo *final_recipients = (ClientInfo *)malloc(sizeof(ClientInfo));
-    final_recipients->server_list = (char **)malloc(info->server_count * sizeof(char *));
-    final_recipients->key_list = (char ***)malloc(info->server_count * sizeof(char **));
-    final_recipients->server_count = 0;
+    char *MessageType; 
+ 
+    //Use strtok to extract the first word 
+    MessageType = strtok(message, " ");
 
-    char *token = strtok(recipients, ",.");
-    int input_row = 0; //Track rows in final_recipients
-    int input_column = 0;
-    while(token){
-        for(int i = 0; i < info->server_count; i++){
-            int input_column = 0;   //Track columns in key_list for each server
-            for(int j = 0; info->key_list[i][j] != NULL; j++){
-                if(strcmp(token, info->key_list[i][j]) == 0){
-                    //Add the server to final_recipients if it's not added yet
-                    if(input_column == 0){
-                        //Allocate memory for the key list for this server
-                        final_recipients->key_list[input_row] = (char **)malloc((info->server_count + 1) * sizeof(char *));
-                        final_recipients->server_list[input_row] = strdup(info->server_list[i]);
-                    }
-                    //Add the matching key to final_recipients
-                    final_recipients->key_list[input_row][input_column++] = strdup(info->key_list[i][j]);
-                }
-            }
-            //If any keys were added for this server, finalize the key_list array for this server
-            if(input_column > 0){
-                final_recipients->key_list[input_row][input_column] = NULL; // Null-terminate the list
-                input_row++; //Move to the next server for future matching
-            }
-        }
-        token = strtok(NULL, ",."); //Get the next recipient token
-    }
+    unsigned char fingerprint = create_fingerprint(public_key);
 
-    final_recipients->server_count = input_row;
-
-    unsigned char fingerprint = create_fingerprint(public_key); //Get fingerprint
+    cJSON *all_participants = cJSON_CreateArray();
+    cJSON *recip_symm_keys = cJSON_CreateArray();
+    cJSON *dest_servers = cJSON_CreateArray();
 
     //Determine what message type it is
     if(MessageType == "hello"){ //When it is a hello message, the public key is added to data
@@ -250,65 +228,36 @@ void *send_messages(int client_socket, char message, char messageType, char reci
     }else if(MessageType == "Private"){ //Private Chat
         cJSON_AddStringToObject(data_obj, "type", "chat");
         
-        cJSON *chat = cJSON_CreateObject();
-        all_participants = json_object_new_array();
-        json_object_array_add(all_participants, json_object_new_string(fingerprint));
-
-        for(i = 0; i < final_recipients->server_count; i++){
-            for(int j = 0; info->key_list[i][j] != NULL; j++){
-                BIO *bio = BIO_new_mem_buf(info->key_list[i][j], -1);
-                EVP_PKEY *Recip_Pub_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
-                json_object_array_add(all_participants, json_object_new_string(create_fingerprint(Recip_Pub_key)));  
-            }
+        cJSON_AddItemToArray(all_participants, cJSON_CreateString(fingerprint));
+        for (int i = 0; i < num_recipients; i++) {
+            cJSON_AddItemToArray(all_participants, cJSON_CreateString("recipient_fingerprint"));
         }
+        cJSON_AddItemToObject(data_obj, "symm_keys", recip_symm_keys);
 
+        cJSON *chat = cJSON_CreateObject();
         cJSON_AddStringToObject(chat, "message", message);
 
         unsigned char* key, iv, ciphertext, tag;
-        unsigned char *chat_json_str = cJSON_Print(chat); //Convert cJSON to string
+        char *chat_json_str = cJSON_Print(chat); //Convert cJSON to string
 
         //Encrypt and convert back to cJSON
         AES_Encrypt(chat_json_str, key, iv, ciphertext, tag); 
-        chat_json_str = base64_encode(chat_json_str);
         chat = cJSON_Parse(chat_json_str);
 
-        //Adding Symm_keys
-        symm_keys_array = json_object_new_array();
-        for(i = 0; i < final_recipients->server_count; i++){
-            for(int j = 0; info->key_list[i][j] != NULL; j++){    
-                BIO *bio = BIO_new_mem_buf(info->key_list[i][j], -1);
-                EVP_PKEY *recip_pub_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
-                unsigned char encrypted_key[256]; // Buffer for the RSA-encrypted AES key
-                int encrypted_key_len;
-
-                EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(recip_pub_key, NULL);
-                if(!ctx || EVP_PKEY_encrypt_init(ctx) <= 0){
-                    perror("Could not initiate encryption for AES key");
-                }
-
-                if(EVP_PKEY_encrypt(ctx, encrypted_key, &encrypted_key_len, aes_key, sizeof(aes_key)) <= 0){
-                    perror("Could not encrypt AES key");
-                }
-
-                EVP_PKEY_CTX_free(ctx); // Clean up the context
-
-                char encrypted_key_encoded = base64_encode(encrypted_key);
-
-                json_object_array_add(symm_keys_array, encrypted_key_encoded);
-            }
+        for (int i = 0; i < num_servers; i++) {
+            cJSON_AddItemToArray(dest_servers, cJSON_CreateNumber(i)); // TO COMPLETE NEEDS SERVER ADDRESS, replace i
         }
-
-        dest_servers = json_object_new_array();
-        for(i = 0; i < final_recipients->server_count; i++){
-            json_object_array_add(dest_servers, json_object_new_string(info->server_list[i]));  
+        cJSON_AddItemToObject(data_obj, "destination_servers", dest_servers);
+        
+        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv, 16));
+        
+        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv, 16)); // Assuming IV length of 16 bytes
+        for (int i = 0; i < num_recipients; i++) {
+            cJSON_AddItemToArray(recip_symm_keys, cJSON_CreateString("<Base64 encoded (AES key encrypted with recipient's public RSA key)>"));
         }
-        json_object_object_add(data_obj, "destination_servers", dest_servers);
+        cJSON_AddItemToObject(data_obj, "symm_keys", recip_symm_keys);
 
-        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv));
-
-        json_object_object_add(data_obj, "symm_keys", symm_keys_array);
-
-        json_object_object_add(data_obj, "chat", chat);
+        cJSON_AddItemToObject(data_obj, "chat", chat);
     }   
 
     //Turns counter to string
@@ -325,7 +274,7 @@ void *send_messages(int client_socket, char message, char messageType, char reci
     unsigned char *private_key;
     EVP_PKEY_get_raw_private_key(pkeys, private_key, 32);
 
-    unsigned char *signature = sign_date(private_key, to_sign, data_len + 1);
+    unsigned char *signature = sign_data(private_key, to_sign, data_len + 1);
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
@@ -336,9 +285,11 @@ void *send_messages(int client_socket, char message, char messageType, char reci
     cJSON_AddStringToObject(root, "signature", encoded_sign);
 
     //Return final JSON
-    char *final_json_str[BUFFER_SIZE];
-    final_json_str = cJSON_Print(root);
+    char *final_json_str = cJSON_Print(root);
     send(client_socket, final_json_str, strlen(final_json_str), flags);
+
+    free(to_sign);
+    free(final_json_str);
 }
 
 void *receive_messages(void *arg) {
@@ -363,7 +314,7 @@ void *receive_messages(void *arg) {
             }
 
             size_t output_length;
-            unsigned char *decoded_message = base64_decode(encoded_message, strlen(encoded_message), &output_length);
+            unsigned char *decoded_message = base64_decode(encoded_message, strlen(encoded_message));
 
             if (decoded_message) {
                 decoded_message[output_length] = '\0'; // end correctly 
@@ -428,95 +379,6 @@ cJSON *json = cJSON_Parse(buffer);
     return NULL;
 }
 
-void send_client_list_request(int client_socket){
-    //Create the JSON object for the client list request
-    cJSON *request = cJSON_CreateObject();
-    cJSON_AddStringToObject(request, "type", "client_list_request");
-
-    //Convert JSON object to string
-    char *request_str = cJSON_Print(request);
-
-    //Send the request to the server
-    send(client_socket, request_str, strlen(request_str), 0);
-
-    //Clean up
-    cJSON_Delete(request);
-    free(request_str);
-}
-
-typedef struct {
-    char **server_list;   // Array of server addresses
-    char ***key_list;     // 2D Array of client keys (per server)
-    int server_count;     // Number of servers
-} ClientInfo;
-
-ClientInfo *receive_client_list_response(int client_socket){
-    char buffer[BUFFER_SIZE];
-    int read_size;
-
-    //Receive the response from the server
-    read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    if(read_size > 0){
-        buffer[read_size] = '\0';  //Null-terminate the data
-
-        //Parse the JSON response
-        cJSON *response = cJSON_Parse(buffer);
-        if(response == NULL){
-            perror("Error parsing JSON response");
-            return;
-        }
-
-        //Initialize ClientInfo structure
-        ClientInfo *info = (ClientInfo *)malloc(sizeof(ClientInfo));
-        info->server_list = NULL;
-        info->key_list = NULL;
-        info->server_count = 0;
-
-        //Check the type of the response
-        cJSON *type = cJSON_GetObjectItem(response, "type");
-        if(cJSON_IsString(type) && strcmp(type->valuestring, "client_list") == 0) {
-            //Get the list of servers
-            cJSON *servers = cJSON_GetObjectItem(response, "servers");
-            if(cJSON_IsArray(servers)){
-                info->server_count = cJSON_GetArraySize(servers);
-                info->server_list = (char **)malloc(info->server_count * sizeof(char *));
-                info->key_list = (char ***)malloc(info->server_count * sizeof(char **));
-
-                //Iterate over the servers array
-                for(int i = 0; i < info->server_count; i++){
-                    cJSON *server = cJSON_GetArrayItem(servers, i);
-                    cJSON *address = cJSON_GetObjectItem(server, "address");
-                    cJSON *clients = cJSON_GetObjectItem(server, "clients");
-
-                    if(cJSON_IsString(address)){
-                        info->server_list[i] = strdup(address->valuestring);
-                    }
-
-                    if(cJSON_IsArray(clients)){
-                        int client_count = cJSON_GetArraySize(clients);
-                        info->key_list[i] = (char **)malloc((client_count + 1) * sizeof(char *));
-                        //Iterate over the clients array
-                        for(int j = 0; j < client_count; j++){
-                            cJSON *client = cJSON_GetArrayItem(clients, j);
-                            if(cJSON_IsString(client)){
-                                info->key_list[i][j] = strdup(client->valuestring);
-                            }
-                        }
-                        // Null-terminate the client list for this server
-                        info->key_list[i][client_count] = NULL;
-                    }
-                }
-            }
-        }
-        //Clean up
-        cJSON_Delete(response);
-    } else {
-        perror("Failed to receive data from server");
-    }
-
-    return info;
-}
-
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <Server IP> <Port number>\n", argv[0]);
@@ -564,12 +426,12 @@ int main(int argc, char *argv[]) {
     printf("Current online: %s\n", online_users);
 
     //Send 'hello' message to server
-    send_messages(client_socket, NULL, "hello", NULL, 0);
+    send_messages(client_socket, "hello", 0);
 
     printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
-    if (pthread_create(&thread_id, NULL, receive_messages(), (void *)&client_socket) < 0) {
+    if (pthread_create(&thread_id, NULL, receive_messages, (void *)&client_socket) < 0) {
         perror("Unable to create thread");
         close(client_socket);
         return 1;
@@ -580,21 +442,13 @@ int main(int argc, char *argv[]) {
         fgets(message, BUFFER_SIZE, stdin);
         message[strcspn(message, "\n")] = 0;
 
-        size_t encoded_length;
-        if(message){
-            char messageType; 
-            char recipients; 
-            char *client_info;
+        char *encoded_message = base64_encode((unsigned char *)message, strlen(message));
 
-            messageType = strtok(str, " "); //Use strtok to extract the first word 
-            if(messageType == "Private"){
-                printf("Who would you like to send this message to? please enter the recipent's destination servers separated by commas .");
-                fgets(recipients, BUFFER_SIZE, stdin);
-                send_client_list_request(client_socket);
-                client_info = receive_client_list_response(client_socket);
-            }
-            send_messages(client_socket, message, messageType, recipients, client_info, 0);
-            free(message);
+        if(encoded_message){
+            send_messages(client_socket, encoded_message, 0);
+            free(encoded_message);
+        } else {
+            printf("Failed to encode the message.\n");
         }
     }
     close(client_socket);
