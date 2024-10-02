@@ -327,7 +327,7 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
 
     final_recipients->server_count = input_row;
 
-    unsigned char fingerprint = create_fingerprint(public_key); //Get fingerprint
+    unsigned char *fingerprint = create_fingerprint(pkeys); //Get fingerprint
 
     char *MessageType;
     MessageType = "hello";
@@ -359,7 +359,7 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
 
         cJSON_AddStringToObject(chat, "message", message);
 
-        unsigned char* key, iv, ciphertext, tag;
+        unsigned char *key, *iv, *ciphertext, *tag;
         unsigned char *chat_json_str = cJSON_Print(chat); //Convert cJSON to string
 
         //Encrypt and convert back to cJSON
@@ -417,18 +417,15 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
     char *to_sign = (char *)malloc(data_len + 1);
     snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str); //Concatenate data and counter
 
-    //Sign the data with a private key
-    unsigned char *private_key;
-    EVP_PKEY_get_raw_private_key(pkeys, private_key, 32);
-
-    unsigned char *signature = sign_data(private_key, to_sign, data_len + 1);
+    //Create signature with private key
+    unsigned char *signature = sign_data(pkeys, to_sign, data_len + 1);
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
     }
 
     //Base64 encode the signature and add to 
-    unsigned char encoded_sign = base64_encode(signature, data_len);
+    unsigned char *encoded_sign = base64_encode(signature, data_len);
     cJSON_AddStringToObject(root, "signature", encoded_sign);
 
     //Return final JSON
