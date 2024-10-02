@@ -20,7 +20,7 @@
     #include <netinet/in.h>
     #include <sys/socket.h>
     #include <pthread.h>
-#endif
+#endifclear                         
 
 #define BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
@@ -128,7 +128,7 @@ unsigned char *create_fingerprint(EVP_PKEY *public_key){
     return fingerprint;
 }
 
-EVP_PKEY* generate_RSA_keys(){
+EVP_PKEY *generate_RSA_keys(){
     int ret = 0;
     RSA	*r = NULL;
 	BIGNUM *bne = NULL;
@@ -187,10 +187,7 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     return ciphertext_len;
 }
 
-void *send_messages(int client_socket, char* message, int flags) {
-    int num_recipients = 1; // TO COMPLETE
-    int num_servers = 1; // TO COMPLETE
-
+void *send_messages(int client_socket, char *message, char messageType, char recipients, ClientInfo *client_info, int flags) {
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "signed_data");
@@ -442,13 +439,21 @@ int main(int argc, char *argv[]) {
         fgets(message, BUFFER_SIZE, stdin);
         message[strcspn(message, "\n")] = 0;
 
-        char *encoded_message = base64_encode((unsigned char *)message, strlen(message));
+        size_t encoded_length;
+        if(message){
+            char messageType; 
+            char recipients; 
+            char *client_info;
 
-        if(encoded_message){
-            send_messages(client_socket, encoded_message, 0);
-            free(encoded_message);
-        } else {
-            printf("Failed to encode the message.\n");
+            messageType = strtok(str, " "); //Use strtok to extract the first word 
+            if(messageType == "Private"){
+                printf("Who would you like to send this message to? please enter the recipent's destination servers separated by commas .");
+                fgets(recipients, BUFFER_SIZE, stdin);
+                send_client_list_request(client_socket);
+                client_info = receive_client_list_response(client_socket);
+            }
+            send_messages(client_socket, message, messageType, recipients, client_info, 0);
+            free(message);
         }
     }
     close(client_socket);
