@@ -119,7 +119,7 @@ unsigned char *create_fingerprint(EVP_PKEY *public_key){
 
     //Base64 encode the hash to create the fingerprint
     size_t input_length = SHA256_DIGEST_LENGTH;
-    unsigned char *fingerprint = base64_encode(hash, input_length, input_length);
+    unsigned char *fingerprint = base64_encode(hash, input_length);
 
     BIO_free(bio);
     free(pem_key);
@@ -127,7 +127,7 @@ unsigned char *create_fingerprint(EVP_PKEY *public_key){
     return fingerprint;
 }
 
-EVP_PKEY generate_RSA_keys(){
+EVP_PKEY *generate_RSA_keys(){
     int ret = 0;
     RSA	*r = NULL;
 	BIGNUM *bne = NULL;
