@@ -570,8 +570,7 @@ int main(int argc, char *argv[]) {
     printf("Current online: %s\n", online_users);
 
     //Send 'hello' message to server
-    send_messages(client_socket, NULL, "hello", NULL, 0);
-
+    send_messages(client_socket, NULL, "hello", NULL, NULL, 0);
     printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
