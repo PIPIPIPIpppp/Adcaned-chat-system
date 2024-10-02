@@ -348,7 +348,7 @@ void *receive_messages(void *arg) {
 
     while ((read_size = recv(socket, buffer, BUFFER_SIZE, 0)) > 0) {
         buffer[read_size] = '\0';
-	// Find the message body location
+	    // Find the message body location
         char *colon_pos = strrchr(buffer, ':');
         if (colon_pos) {
             char header[BUFFER_SIZE];
@@ -453,6 +453,11 @@ typedef struct {
 ClientInfo *receive_client_list_response(int client_socket){
     char buffer[BUFFER_SIZE];
     int read_size;
+    //Initialize ClientInfo structure
+    ClientInfo *info = (ClientInfo *)malloc(sizeof(ClientInfo));
+    info->server_list = NULL;
+    info->key_list = NULL;
+    info->server_count = 0;
 
     //Receive the response from the server
     read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
@@ -465,12 +470,6 @@ ClientInfo *receive_client_list_response(int client_socket){
             perror("Error parsing JSON response");
             return;
         }
-
-        //Initialize ClientInfo structure
-        ClientInfo *info = (ClientInfo *)malloc(sizeof(ClientInfo));
-        info->server_list = NULL;
-        info->key_list = NULL;
-        info->server_count = 0;
 
         //Check the type of the response
         cJSON *type = cJSON_GetObjectItem(response, "type");
@@ -569,7 +568,7 @@ int main(int argc, char *argv[]) {
     printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
-    if (pthread_create(&thread_id, NULL, receive_messages(), (void *)&client_socket) < 0) {
+    if (pthread_create(&thread_id, NULL, receive_messages(client_socket), (void *)&client_socket) < 0) {
         perror("Unable to create thread");
         close(client_socket);
         return 1;
@@ -582,11 +581,11 @@ int main(int argc, char *argv[]) {
 
         size_t encoded_length;
         if(message){
-            char messageType; 
-            char recipients; 
+            char *messageType; 
+            char *recipients; 
             ClientInfo *client_info;
 
-            messageType = strtok(str, " "); //Use strtok to extract the first word 
+            messageType = strtok(message, " "); //Use strtok to extract the first word 
             if(messageType == "Private"){
                 printf("Who would you like to send this message to? please enter the recipent's destination servers separated by commas .");
                 fgets(recipients, BUFFER_SIZE, stdin);
