@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <openssl/sha.h>
+#include <stdbool.h>
 
 #ifdef _WIN32  // Windows
     #include <winsock2.h>
@@ -19,6 +20,9 @@
 
 #define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
+#define NUM_OTHER_SERVERS 5
+#define MAX_WORDS 10
+#define MAX_SERVERS 10
 
 typedef struct {
     int socket;
@@ -31,6 +35,8 @@ typedef struct {
 typedef struct {
     int socket;
     int index;
+    char ip[16];
+    int port;
 } Server;
 
 Client clients[MAX_CLIENTS];
@@ -78,6 +84,86 @@ void send_online_users(int new_client_socket) {
     }
     pthread_mutex_unlock(&mutex);
     send(new_client_socket, online_users, strlen(online_users), 0);
+}
+bool add_server(const char *ip, int port)
+{
+    if (server_count >= MAX_SERVERS)
+    {
+        printf("Server list is full!\n");
+        return false;
+    }
+
+    for (int i = 0; i < server_count; i++)
+    {
+        if (strcmp(neighbor_servers[i].ip, ip) == 0 && neighbor_servers[i].port == port)
+        {
+            printf("Server already exists in the list!\n");
+            return false;
+        }
+    }
+
+    strcpy(neighbor_servers[server_count].ip, ip);
+    neighbor_servers[server_count].port = port;
+    server_count++;
+    printf("Added server: %s:%d\n", ip, port);
+    return true;
+}
+void request_client_update()
+{
+    for (int i = 0; i < server_count; i++)
+    {
+        int server_socket;
+        struct sockaddr_in server_addr;
+
+        if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        {
+            printf("Socket creation error for server %d\n", i + 1);
+            continue;
+        }
+
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_port = htons(neighbor_servers[i].port);
+        inet_pton(AF_INET, neighbor_servers[i].ip, &server_addr.sin_addr);
+
+        if (connect(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+        {
+            printf("Failed to connect to server %d\n", i + 1);
+            close(server_socket);
+            continue;
+        }
+
+        const char *greeting_message = "Hello from this server!";
+        send(server_socket, greeting_message, strlen(greeting_message), 0);
+
+        const char *request_message = "client_update_request";
+        send(server_socket, request_message, strlen(request_message), 0);
+
+        char buffer[BUFFER_SIZE];
+        int bytes_received = recv(server_socket, buffer, BUFFER_SIZE, 0);
+        if (bytes_received > 0)
+        {
+            buffer[bytes_received] = '\0';
+            printf("Received update from server %d: %s\n", i + 1, buffer);
+
+            char *token = strtok(buffer, ", ");
+            pthread_mutex_lock(&mutex);
+            client_count = 0;
+            while (token != NULL && client_count < MAX_CLIENTS)
+            {
+                strcpy(clients[client_count].username, token);
+                clients[client_count].socket = -1;
+                client_count++;
+                token = strtok(NULL, ", ");
+            }
+            pthread_mutex_unlock(&mutex);
+        }
+        else
+        {
+            perror("Failed to receive update");
+        }
+
+        close(server_socket);
+    }
 }
 
 void *handle_client(void *arg) {
@@ -294,6 +380,19 @@ int main(int argc, char *argv[]) {
     listen(server_socket, 3);
 
     printf("waitting for connection...\n");
+
+    for (int i = 0; i < NUM_OTHER_SERVERS; i++)
+    {
+        strcpy(neighbor_servers[i].ip, "192.168.0.100");
+        neighbor_servers[i].port = 8877 + i;
+    }
+
+    for (int i = 0; i < NUM_OTHER_SERVERS; i++)
+    {
+        add_server(neighbor_servers[i].ip, neighbor_servers[i].port);
+    }
+
+    request_client_update();
 
     while ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_len))) {
         printf("connection recieved\n");
