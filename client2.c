@@ -91,7 +91,8 @@ unsigned char *sign_data(EVP_PKEY *private_key, const unsigned char *data_counte
 
     EVP_SignInit(mdctx, EVP_sha256());
     EVP_SignUpdate(mdctx, data_counter, data_len);
-    if (EVP_SignFinal(mdctx, signature, 32, private_key) != 1) {
+    unsigned int *s = 32;
+    if (EVP_SignFinal(mdctx, signature, s, private_key) != 1) {
         free(signature);
         EVP_MD_CTX_free(mdctx);
         perror("Failed to create signature");
