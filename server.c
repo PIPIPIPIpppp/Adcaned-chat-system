@@ -42,7 +42,7 @@ typedef struct {
 char *spam_words[MAX_WORDS] = {
     "shift", "Go to hell", "Dumb", "Fuck you", "Son of a beach",
     "You stupid jerk", "Drop dead", "You bastard", "Get lost"};
-
+Server neighbor_servers[MAX_SERVERS];
 Client clients[MAX_CLIENTS];
 int client_count = 0;
 int server_count = 0;
