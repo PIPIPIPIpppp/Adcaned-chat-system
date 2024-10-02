@@ -304,7 +304,7 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
 
                 EVP_PKEY_CTX_free(ctx); // Clean up the context
 
-                char encrypted_key_encoded = base64_encode(encrypted_key);
+                char encrypted_key_encoded = base64_encode(encrypted_key, encrypted_key_len);
 
                 json_object_array_add(symm_keys_array, encrypted_key_encoded);
             }
