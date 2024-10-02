@@ -45,6 +45,7 @@ char *spam_words[MAX_WORDS] = {
 
 Client clients[MAX_CLIENTS];
 int client_count = 0;
+int server_count = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
