@@ -193,7 +193,89 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     return ciphertext_len;
 }
 
-void *send_messages(int client_socket, char *message, char messageType, char recipients, ClientInfo client_info, int flags) {
+void send_client_list_request(int client_socket){
+    //Create the JSON object for the client list request
+    cJSON *request = cJSON_CreateObject();
+    cJSON_AddStringToObject(request, "type", "client_list_request");
+
+    //Convert JSON object to string
+    char *request_str = cJSON_Print(request);
+
+    //Send the request to the server
+    send(client_socket, request_str, strlen(request_str), 0);
+
+    //Clean up
+    cJSON_Delete(request);
+    free(request_str);
+}
+
+ClientInfo *receive_client_list_response(int client_socket){
+    char buffer[BUFFER_SIZE];
+    int read_size;
+    //Initialize ClientInfo structure
+    ClientInfo *info = (ClientInfo *)malloc(sizeof(ClientInfo));
+    info->server_list = NULL;
+    info->key_list = NULL;
+    info->server_count = 0;
+
+    //Receive the response from the server
+    read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
+    if(read_size > 0){
+        buffer[read_size] = '\0';  //Null-terminate the data
+
+        //Parse the JSON response
+        cJSON *response = cJSON_Parse(buffer);
+        if(response == NULL){
+            perror("Error parsing JSON response");
+            return;
+        }
+
+        //Check the type of the response
+        cJSON *type = cJSON_GetObjectItem(response, "type");
+        if(cJSON_IsString(type) && strcmp(type->valuestring, "client_list") == 0) {
+            //Get the list of servers
+            cJSON *servers = cJSON_GetObjectItem(response, "servers");
+            if(cJSON_IsArray(servers)){
+                info->server_count = cJSON_GetArraySize(servers);
+                info->server_list = (char **)malloc(info->server_count * sizeof(char *));
+                info->key_list = (char ***)malloc(info->server_count * sizeof(char **));
+
+                //Iterate over the servers array
+                for(int i = 0; i < info->server_count; i++){
+                    cJSON *server = cJSON_GetArrayItem(servers, i);
+                    cJSON *address = cJSON_GetObjectItem(server, "address");
+                    cJSON *clients = cJSON_GetObjectItem(server, "clients");
+
+                    if(cJSON_IsString(address)){
+                        info->server_list[i] = strdup(address->valuestring);
+                    }
+
+                    if(cJSON_IsArray(clients)){
+                        int client_count = cJSON_GetArraySize(clients);
+                        info->key_list[i] = (char **)malloc((client_count + 1) * sizeof(char *));
+                        //Iterate over the clients array
+                        for(int j = 0; j < client_count; j++){
+                            cJSON *client = cJSON_GetArrayItem(clients, j);
+                            if(cJSON_IsString(client)){
+                                info->key_list[i][j] = strdup(client->valuestring);
+                            }
+                        }
+                        // Null-terminate the client list for this server
+                        info->key_list[i][client_count] = NULL;
+                    }
+                }
+            }
+        }
+        //Clean up
+        cJSON_Delete(response);
+    } else {
+        perror("Failed to receive data from server");
+    }
+
+    return info;
+}
+
+void *send_messages(int client_socket, char *message, char *messageType, char *recipients, ClientInfo *client_info, int flags) {
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "signed_data");
@@ -249,7 +331,7 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
 
 
     //Determine what message type it is
-    if(MessageType == "hello"){ //When it is a hello message, the public key is added to data
+    if(messageType == "hello"){ //When it is a hello message, the public key is added to data
         cJSON_AddStringToObject(data_obj, "type", "hello");
         cJSON_AddStringToObject(data_obj, "public_key", public_key);
     }else if(MessageType == "Public"){ //Public Chat
@@ -439,88 +521,6 @@ void *receive_messages(void *arg) {
     }
 
     return NULL;
-}
-
-void send_client_list_request(int client_socket){
-    //Create the JSON object for the client list request
-    cJSON *request = cJSON_CreateObject();
-    cJSON_AddStringToObject(request, "type", "client_list_request");
-
-    //Convert JSON object to string
-    char *request_str = cJSON_Print(request);
-
-    //Send the request to the server
-    send(client_socket, request_str, strlen(request_str), 0);
-
-    //Clean up
-    cJSON_Delete(request);
-    free(request_str);
-}
-
-ClientInfo *receive_client_list_response(int client_socket){
-    char buffer[BUFFER_SIZE];
-    int read_size;
-    //Initialize ClientInfo structure
-    ClientInfo *info = (ClientInfo *)malloc(sizeof(ClientInfo));
-    info->server_list = NULL;
-    info->key_list = NULL;
-    info->server_count = 0;
-
-    //Receive the response from the server
-    read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    if(read_size > 0){
-        buffer[read_size] = '\0';  //Null-terminate the data
-
-        //Parse the JSON response
-        cJSON *response = cJSON_Parse(buffer);
-        if(response == NULL){
-            perror("Error parsing JSON response");
-            return;
-        }
-
-        //Check the type of the response
-        cJSON *type = cJSON_GetObjectItem(response, "type");
-        if(cJSON_IsString(type) && strcmp(type->valuestring, "client_list") == 0) {
-            //Get the list of servers
-            cJSON *servers = cJSON_GetObjectItem(response, "servers");
-            if(cJSON_IsArray(servers)){
-                info->server_count = cJSON_GetArraySize(servers);
-                info->server_list = (char **)malloc(info->server_count * sizeof(char *));
-                info->key_list = (char ***)malloc(info->server_count * sizeof(char **));
-
-                //Iterate over the servers array
-                for(int i = 0; i < info->server_count; i++){
-                    cJSON *server = cJSON_GetArrayItem(servers, i);
-                    cJSON *address = cJSON_GetObjectItem(server, "address");
-                    cJSON *clients = cJSON_GetObjectItem(server, "clients");
-
-                    if(cJSON_IsString(address)){
-                        info->server_list[i] = strdup(address->valuestring);
-                    }
-
-                    if(cJSON_IsArray(clients)){
-                        int client_count = cJSON_GetArraySize(clients);
-                        info->key_list[i] = (char **)malloc((client_count + 1) * sizeof(char *));
-                        //Iterate over the clients array
-                        for(int j = 0; j < client_count; j++){
-                            cJSON *client = cJSON_GetArrayItem(clients, j);
-                            if(cJSON_IsString(client)){
-                                info->key_list[i][j] = strdup(client->valuestring);
-                            }
-                        }
-                        // Null-terminate the client list for this server
-                        info->key_list[i][client_count] = NULL;
-                    }
-                }
-            }
-        }
-        //Clean up
-        cJSON_Delete(response);
-    } else {
-        perror("Failed to receive data from server");
-    }
-
-    return info;
 }
 
 int main(int argc, char *argv[]) {
