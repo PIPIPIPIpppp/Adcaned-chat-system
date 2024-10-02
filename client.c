@@ -180,7 +180,7 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     EVP_EncryptFinal_ex(ctx, ciphertext + len, &len); //Finalize encryption
     ciphertext_len += len;
 
-    EVP_CIPHER_CTX_crtl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
 
     EVP_CIPHER_CTX_free(ctx); //Clean up
 
@@ -330,7 +330,7 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
     unsigned char *private_key;
     EVP_PKEY_get_raw_private_key(pkeys, private_key, 32);
 
-    unsigned char *signature = sign_date(private_key, to_sign, data_len + 1);
+    unsigned char *signature = sign_data(private_key, to_sign, data_len + 1);
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
