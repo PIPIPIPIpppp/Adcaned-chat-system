@@ -180,7 +180,7 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     EVP_EncryptFinal_ex(ctx, ciphertext + len, &len); //Finalize encryption
     ciphertext_len += len;
 
-    EVP_CIPHER_CTX_crtl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag); //Get the tag
 
     EVP_CIPHER_CTX_free(ctx); //Clean up
 
@@ -392,7 +392,7 @@ void *receive_messages(void *arg) {
         return;
     }
 
-cJSON *json = cJSON_Parse(buffer);
+    cJSON *json = cJSON_Parse(buffer);
     if (json) {
         // Extract message type
         cJSON *type = cJSON_GetObjectItem(json, "type");
