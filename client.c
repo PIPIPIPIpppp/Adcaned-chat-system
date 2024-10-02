@@ -19,7 +19,7 @@
     #include <netinet/in.h>
     #include <sys/socket.h>
     #include <pthread.h>
-#endif
+#endifclear                         
 
 #define BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
@@ -185,7 +185,7 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     return ciphertext_len;
 }
 
-void *send_messages(int client_socket, char message, char messageType, char recipients, char *client_info, int flags) {
+void *send_messages(int client_socket, char *message, char messageType, char recipients, ClientInfo *client_info, int flags) {
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "signed_data");
@@ -584,7 +584,7 @@ int main(int argc, char *argv[]) {
         if(message){
             char messageType; 
             char recipients; 
-            char *client_info;
+            ClientInfo *client_info;
 
             messageType = strtok(str, " "); //Use strtok to extract the first word 
             if(messageType == "Private"){
