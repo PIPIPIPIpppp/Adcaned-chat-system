@@ -382,6 +382,7 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
                     perror("Could not initiate encryption for AES key");
                 }
 
+                unsigned char aes_key[16];
                 if(EVP_PKEY_encrypt(ctx, encrypted_key, &encrypted_key_len, aes_key, sizeof(aes_key)) <= 0){
                     perror("Could not encrypt AES key");
                 }
