@@ -137,7 +137,7 @@ EVP_PKEY* generate_RSA_keys(){
     pkeys = EVP_PKEY_new();
 
     unsigned long e = 65537;
-     int bits = 2048;  //key length
+    int bits = 2048;  //key length
     
     //Generate keys
     bne = BN_new();
