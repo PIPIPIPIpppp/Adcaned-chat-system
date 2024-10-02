@@ -317,9 +317,44 @@ void *receive_messages(void *arg) {
         return;
     }
 
-    cJSON *json = cJSON_Parse(buffer);
-    if(json){
-        //This needs to be finished
+cJSON *json = cJSON_Parse(buffer);
+    if (json) {
+        // Extract message type
+        cJSON *type = cJSON_GetObjectItem(json, "type");
+        if (type && cJSON_IsString(type)) {
+            if (strcmp(type->valuestring, "public_chat") == 0) {
+                // Handle public chat
+                cJSON *sender = cJSON_GetObjectItem(json, "sender");
+                cJSON *message = cJSON_GetObjectItem(json, "message");
+
+                if (sender && cJSON_IsString(sender) && message && cJSON_IsString(message)) {
+                    printf("[Public Chat] %s: %s\n", sender->valuestring, message->valuestring);
+                } else {
+                    printf("Invalid public chat message structure.\n");
+                }
+
+            } else if (strcmp(type->valuestring, "chat") == 0) {
+                // Handle private chat (encrypted)
+                cJSON *sender = cJSON_GetObjectItem(json, "sender");
+                cJSON *encrypted_message = cJSON_GetObjectItem(json, "chat");
+
+                if (sender && cJSON_IsString(sender) && encrypted_message && cJSON_IsString(encrypted_message)) {
+                    printf("[Private Chat] From %s: %s (encrypted message)\n", sender->valuestring, encrypted_message->valuestring);
+
+                    // If needed, decrypt encrypted_message here using AES or RSA
+                } else {
+                    printf("Invalid private chat message structure.\n");
+                }
+            } else {
+                // Handle other types of messages if needed
+                printf("Unknown message type: %s\n", type->valuestring);
+            }
+        } else {
+            printf("Invalid message type or structure.\n");
+        }
+        cJSON_Delete(json);
+    } else {
+        printf("Failed to parse JSON.\n");
     }
 
     return NULL;
