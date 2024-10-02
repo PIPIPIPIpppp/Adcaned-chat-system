@@ -31,6 +31,12 @@ const char base64_chars[] =
     "0123456789+/";
 static const int mod_table[] = {0, 2, 1};
 
+typedef struct {
+    char **server_list;   // Array of server addresses
+    char ***key_list;     // 2D Array of client keys (per server)
+    int server_count;     // Number of servers
+} ClientInfo;
+
 char *base64_encode(const unsigned char *data, size_t input_length) {
     size_t output_length = 4 * ((input_length + 2) / 3);
     char *encoded_data = malloc(output_length + 1);
@@ -187,7 +193,7 @@ int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv,
     return ciphertext_len;
 }
 
-void *send_messages(int client_socket, char *message, char messageType, char recipients, ClientInfo *client_info, int flags) {
+void *send_messages(int client_socket, char *message, char messageType, char recipients, ClientInfo client_info, int flags) {
     // Creating the JSON structure
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "signed_data");
@@ -370,7 +376,7 @@ void *receive_messages(void *arg) {
             }
 
             size_t output_length;
-            unsigned char *decoded_message = base64_decode(encoded_message, strlen(encoded_message), &output_length);
+            unsigned char *decoded_message = base64_decode(encoded_message, strlen(encoded_message));
 
             if (decoded_message) {
                 decoded_message[output_length] = '\0'; // end correctly 
@@ -450,12 +456,6 @@ void send_client_list_request(int client_socket){
     cJSON_Delete(request);
     free(request_str);
 }
-
-typedef struct {
-    char **server_list;   // Array of server addresses
-    char ***key_list;     // 2D Array of client keys (per server)
-    int server_count;     // Number of servers
-} ClientInfo;
 
 ClientInfo *receive_client_list_response(int client_socket){
     char buffer[BUFFER_SIZE];
