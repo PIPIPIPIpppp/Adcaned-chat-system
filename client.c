@@ -12,6 +12,7 @@
     #include <winsock2.h>
     #include <Ws2tcpip.h>
     #include <windows.h>
+    typedef HANDLE pthread_t;
     #pragma comment(lib, "Ws2_32.lib")
 #else  // Linux/Unix
     #include <unistd.h>
@@ -19,7 +20,7 @@
     #include <netinet/in.h>
     #include <sys/socket.h>
     #include <pthread.h>
-#endifclear                         
+#endif                         
 
 #define BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
@@ -31,8 +32,8 @@ const char base64_chars[] =
 static const int mod_table[] = {0, 2, 1};
 
 char *base64_encode(const unsigned char *data, size_t input_length) {
-    size_t *output_length = 4 * ((input_length + 2) / 3);
-    char *encoded_data = malloc(*output_length + 1);
+    size_t output_length = 4 * ((input_length + 2) / 3);
+    char *encoded_data = malloc(output_length + 1);
     if (encoded_data == NULL) return NULL;
 
     for (int i = 0, j = 0; i < input_length;) {
@@ -49,20 +50,20 @@ char *base64_encode(const unsigned char *data, size_t input_length) {
     }
 
     for (int i = 0; i < mod_table[input_length % 3]; i++)
-        encoded_data[*output_length - 1 - i] = '=';
+        encoded_data[output_length - 1 - i] = '=';
 
-    encoded_data[*output_length] = '\0';
+    encoded_data[output_length] = '\0';
     return encoded_data;
 }
 
 unsigned char *base64_decode(const char *data, size_t input_length) {
     if (input_length % 4 != 0) return NULL;
 
-    size_t *output_length = input_length / 4 * 3;
-    if (data[input_length - 1] == '=') (*output_length)--;
-    if (data[input_length - 2] == '=') (*output_length)--;
+    size_t output_length = input_length / 4 * 3;
+    if (data[input_length - 1] == '=') (output_length)--;
+    if (data[input_length - 2] == '=') (output_length)--;
 
-    unsigned char *decoded_data = malloc(*output_length + 1);
+    unsigned char *decoded_data = malloc(output_length + 1);
     if (decoded_data == NULL) return NULL;
 
     for (int i = 0, j = 0; i < input_length;) {
@@ -73,12 +74,12 @@ unsigned char *base64_decode(const char *data, size_t input_length) {
 
         uint32_t triple = (sextet_a << 18) + (sextet_b << 12) + (sextet_c << 6) + sextet_d;
 
-        if (j < *output_length) decoded_data[j++] = (triple >> 16) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 8) & 0xFF;
-        if (j < *output_length) decoded_data[j++] = (triple >> 0) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 16) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 8) & 0xFF;
+        if (j < output_length) decoded_data[j++] = (triple >> 0) & 0xFF;
     }                                                                                                                                      
 
-    decoded_data[*output_length] = '\0';  // Make sure the string ends with a null terminator
+    decoded_data[output_length] = '\0';  // Make sure the string ends with a null terminator
     return decoded_data;
 }
 
@@ -135,7 +136,8 @@ EVP_PKEY *generate_RSA_keys(){
     pkeys = EVP_PKEY_new();
 
     unsigned long e = 65537;
-    
+    int bits = 2048;  //key length
+
     //Generate keys
     bne = BN_new();
 	ret = BN_set_word(bne,e);
@@ -162,7 +164,7 @@ EVP_PKEY *generate_RSA_keys(){
 
 int AES_Encrypt(unsigned char *plaintext, unsigned char *key, unsigned char *iv, unsigned char *ciphertext, unsigned char *tag){
     EVP_CIPHER_CTX *ctx;
-    int plaintext_len = strlen((char*) plaintext)
+    int plaintext_len = strlen((char*) plaintext);
     int len;
     int ciphertext_len;
 
@@ -239,6 +241,7 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
 
     unsigned char fingerprint = create_fingerprint(public_key); //Get fingerprint
 
+
     //Determine what message type it is
     if(MessageType == "hello"){ //When it is a hello message, the public key is added to data
         cJSON_AddStringToObject(data_obj, "type", "hello");
@@ -251,10 +254,12 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
         cJSON_AddStringToObject(data_obj, "type", "chat");
         
         cJSON *chat = cJSON_CreateObject();
-        all_participants = json_object_new_array();
+        
+        cJSON *all_participants = cJSON_CreateArray();
         json_object_array_add(all_participants, json_object_new_string(fingerprint));
 
-        for(i = 0; i < final_recipients->server_count; i++){
+
+        for(int i = 0; i < final_recipients->server_count; i++){
             for(int j = 0; info->key_list[i][j] != NULL; j++){
                 BIO *bio = BIO_new_mem_buf(info->key_list[i][j], -1);
                 EVP_PKEY *Recip_Pub_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
@@ -273,8 +278,8 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
         chat = cJSON_Parse(chat_json_str);
 
         //Adding Symm_keys
-        symm_keys_array = json_object_new_array();
-        for(i = 0; i < final_recipients->server_count; i++){
+        cJSON *symm_keys_array = cJSON_CreateArray();
+        for(int i = 0; i < final_recipients->server_count; i++){
             for(int j = 0; info->key_list[i][j] != NULL; j++){    
                 BIO *bio = BIO_new_mem_buf(info->key_list[i][j], -1);
                 EVP_PKEY *recip_pub_key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
@@ -298,13 +303,13 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
             }
         }
 
-        dest_servers = json_object_new_array();
-        for(i = 0; i < final_recipients->server_count; i++){
+        cJSON *dest_servers = cJSON_CreateArray();
+        for(int i = 0; i < final_recipients->server_count; i++){
             json_object_array_add(dest_servers, json_object_new_string(info->server_list[i]));  
         }
         json_object_object_add(data_obj, "destination_servers", dest_servers);
 
-        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv));
+        cJSON_AddStringToObject(data_obj, "iv", base64_encode(iv, 16));
 
         json_object_object_add(data_obj, "symm_keys", symm_keys_array);
 
@@ -336,9 +341,11 @@ void *send_messages(int client_socket, char *message, char messageType, char rec
     cJSON_AddStringToObject(root, "signature", encoded_sign);
 
     //Return final JSON
-    char *final_json_str[BUFFER_SIZE];
-    final_json_str = cJSON_Print(root);
+    char *final_json_str = cJSON_Print(root);
     send(client_socket, final_json_str, strlen(final_json_str), flags);
+
+    free(to_sign);
+    free(final_json_str);
 }
 
 void *receive_messages(void *arg) {
@@ -569,7 +576,7 @@ int main(int argc, char *argv[]) {
     printf("Welcome to the channel, ready to start chatting\n");
 
     //Create a thread to receive messages
-    if (pthread_create(&thread_id, NULL, receive_messages(), (void *)&client_socket) < 0) {
+    if (pthread_create(&thread_id, NULL, receive_messages, (void *)&client_socket) < 0) {
         perror("Unable to create thread");
         close(client_socket);
         return 1;
