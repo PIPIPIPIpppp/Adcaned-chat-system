@@ -109,4 +109,4 @@ The code labeled vulnerable contains at least three intentional security flaws.
 
 
 ### Please navigate to the vulnerable tree for code with backdoors.
-### Navigate to not-vulnerable for code with no backdoors.
+### Navigate to not-vulnerable tree for code with no backdoors.
