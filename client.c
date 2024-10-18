@@ -7,6 +7,7 @@
 #include <openssl/pem.h>
 #include <openssl/bio.h>
 #include <cjson/cJSON.h>
+#include <openssl/rand.h>
 
 #ifdef _WIN32  // Windows
     #include <winsock2.h>
@@ -24,6 +25,7 @@
 
 #define BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
+#define TOKEN_LENGTH 64
 //base64
 const char base64_chars[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -36,6 +38,15 @@ typedef struct {
     char ***key_list;     // 2D Array of client keys (per server)
     int server_count;     // Number of servers
 } ClientInfo;
+
+void generate_session_token(char *token, size_t length) {
+    // Secure token generation using RAND_bytes
+    if (RAND_bytes((unsigned char *)token, length) != 1) {
+        fprintf(stderr, "Error generating session token\n");
+        return;
+    }
+    token[length] = '\0';  // Null-terminate the token
+}
 
 char *base64_encode(const unsigned char *data, size_t input_length) {
     size_t output_length = 4 * ((input_length + 2) / 3);
@@ -419,7 +430,8 @@ void *send_messages(int client_socket, char *message, char *messageType, char *r
     snprintf(to_sign, data_len + 1, "%s%s", data_json_str, counter_str); //Concatenate data and counter
 
     //Create signature with private key
-    unsigned char *signature = sign_data(pkeys, to_sign, data_len + 1);
+    unsigned char *sign_data(EVP_PKEY *private_key, const unsigned char *data_counter, size_t data_len);
+
     if (!signature) {
         fprintf(stderr, "Failed to sign data\n");
         return 1;
@@ -444,6 +456,11 @@ void *receive_messages(void *arg) {
 
     while ((read_size = recv(socket, buffer, BUFFER_SIZE, 0)) > 0) {
         buffer[read_size] = '\0';
+            for (int i = 0; i < strlen(buffer); i++) {
+                if (!isalnum(buffer[i]) && !isspace(buffer[i])) { // Only allow alphanumeric and space
+                printf("Invalid character detected in message.\n");
+                return NULL;
+                }
 	    // Find the message body location
         char *colon_pos = strrchr(buffer, ':');
         if (colon_pos) {
@@ -520,7 +537,7 @@ void *receive_messages(void *arg) {
     } else {
         printf("Failed to parse JSON.\n");
     }
-
+    }
     return NULL;
 }
 

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <openssl/sha.h>
 #include <stdbool.h>
+#include <openssl/rand.h>
 
 #ifdef _WIN32  // Windows
     #include <winsock2.h>
@@ -23,13 +24,14 @@
 #define NUM_OTHER_SERVERS 5
 #define MAX_WORDS 10
 #define MAX_SERVERS 10
+#define TOKEN_LENGTH 64
 
 typedef struct {
     int socket;
     char username[50];
     char password_hash[SHA256_DIGEST_LENGTH]; // aray to hold hashed password
     char salt[16]; // for password
-    int session_token[64]; // session handling
+    int session_token[TOKEN_LENGTH]; // session handling
 } Client;
 
 typedef struct {
@@ -202,6 +204,12 @@ void *handle_client(void *arg) {
         return NULL;
     }
     buffer[read_size] = '\0';
+
+    if (strpbrk(buffer, "!@#$%^&*()<>?/\\|{}[]~`")) {
+    printf("Invalid characters in username\n");
+    close(client_socket);
+    return NULL;
+    }
     pthread_mutex_lock(&mutex);
     strcpy(clients[client_index].username, buffer);
     clients[client_index].socket = client_socket;
@@ -210,7 +218,8 @@ void *handle_client(void *arg) {
     printf("%s Online\n", buffer);
 
     char join_message[BUFFER_SIZE];
-    snprintf(join_message, sizeof(join_message), "%s Join the chatting room", buffer);
+    snprintf(join_message, sizeof(join_message), "%s Joined the chatting room", clients[client_index].username);
+    log_message(join_message);
     broadcast_message(join_message, client_socket);
 
     send_online_users(client_socket);
@@ -263,15 +272,14 @@ void hash_pass_salted(const char *password, const char *salt, const char *hash) 
 }
 
 // create a session token after login
-void generate_session_token(char *token, size_t length){
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    srand(time(NULL));
-    for (size_t i = 0; i < length; i++) {
-        int key = rand() % (int)(sizeof(charset) - 1);
-        token[i] = charset[key];
+void generate_session_token(char *token, size_t length) {
+    if (RAND_bytes((unsigned char*)token, length) != 1) {
+        perror("Failed to generate secure session token");
+        exit(EXIT_FAILURE);
     }
     token[length] = '\0';
 }
+
 
 //validates session token
 int validate_session (const char *token) {
