@@ -1,13 +1,18 @@
 # Group 41 Secure Chat System
 
 Group Members
+
 1.Lochlan Jarvinen
+
 2.Yaqi Peng
+
 3.Brooke Seigert
+
 4.Juniper Worrall
 
 
-Overview
+
+### Overview
 
 This project is a secure chat system developed as part of an advanced secure programming assignment.
 It features a client-server architecture with end-to-end encryption, message integrity verification, 
@@ -15,7 +20,8 @@ and user authentication. The system is designed to comply with the OLAF/Neighbou
 integrating advanced cryptographic practices like RSA and AES.
 
 
-Features
+
+### Features
 
 1. User registration and Authentication
 2. Listing Online Members
@@ -28,14 +34,16 @@ Features
 9. Intentional (ethical) Backdoors for Security Testing
 
 
-Prerequisites
+
+### Prerequisites
 
 C language compiler (GCC Recommended)
 OpenSSL
 cJSON
 
 
-Installing OpenSSL & cJSON
+
+### Installing OpenSSL & cJSON
 
 For Unix run the following command line:
 sudo apt install libssl-dev libcjson-dev
@@ -45,7 +53,8 @@ Using vcpkg install the prerequisites with the following command line:
 vcpkg install cjson openssl
 
 
-Compilation and Startup
+
+### Compilation and Startup
 									
 First start an instance of the server
 
@@ -71,8 +80,9 @@ gcc -o client client.c -pthread -lssl -lcrypto
 4. Run the client by providing the server’s IP address and port number (e.g., 127.0.0.1 and 8080)
 ./client 127.0.0.1 8080
 
-										
-Available User Commands
+
+	  
+### Available User Commands
 
 Public <message>
 Sends a message to everyone.
@@ -86,6 +96,7 @@ list members
 Returns a list of the connected members
 
 
-Known Vulnerabilities
+
+### Known Vulnerabilities
 
 The code named vulnerable contains at least two intentional security flaws.
