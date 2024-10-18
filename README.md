@@ -102,4 +102,4 @@ Returns a list of the connected members
 
 ### Known Vulnerabilities
 
-The code named vulnerable contains at least two intentional security flaws.
+The code labeled vulnerable contains at least two intentional security flaws.
