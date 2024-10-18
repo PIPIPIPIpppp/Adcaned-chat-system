@@ -1,5 +1,6 @@
 # Group 41 Secure Chat System
 
+
 Group Members
 
 1.Lochlan Jarvinen
@@ -105,3 +106,7 @@ Returns a list of the connected members
 ### Known Vulnerabilities
 
 The code labeled vulnerable contains at least three intentional security flaws.
+
+
+### Please navigate to the vulnerable tree for code with backdoors.
+### Navigate to non-vulnerable for code with no backdoors.
