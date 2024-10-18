@@ -84,15 +84,18 @@ gcc -o client client.c -pthread -lssl -lcrypto
 	  
 ### Available User Commands
 
-Public <message>
+Public [message]
+
 Sends a message to everyone.
 
-Private <message> 
+Private [message]
+
 Sends a private message. After entering your message you then be prompted
 to enter a recipient address e.g. e.g. 192.168.0.101 
 For multiple addresses, separate addresses with commas e.g. 192.168.0.101, 192.168.0.102
 
 list members
+
 Returns a list of the connected members
 
 
