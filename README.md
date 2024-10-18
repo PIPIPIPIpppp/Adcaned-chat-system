@@ -38,7 +38,9 @@ integrating advanced cryptographic practices like RSA and AES.
 ### Prerequisites
 
 C language compiler (GCC Recommended)
+
 OpenSSL
+
 cJSON
 
 
